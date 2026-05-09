@@ -1,0 +1,16 @@
+{
+  "name": "Prisma - Method Hallucination",
+  "projectFingerprint": "node: @prisma/client@3.15.2",
+  "aiGeneratedCode": "import { PrismaClient } from '@prisma/client';\nconst prisma = new PrismaClient();\n// findFirstOrThrow only exists in Prisma v4+, not v3\nawait prisma.user.findFirstOrThrow({ where: { id: 1 } });",
+  "apiSurfaceOverrides": {
+    "@prisma/client": [
+      "findFirst", "findMany", "findUnique",
+      "create", "createMany",
+      "update", "updateMany",
+      "delete", "deleteMany",
+      "upsert", "count", "aggregate", "groupBy"
+    ]
+  },
+  "expectedViolations": 1,
+  "_note": "apiSurfaceOverrides injects a mock Prisma v3 API surface so Layer 2 method checks run without needing real node_modules. findFirstOrThrow is absent from the surface (it was added in v4), so this should produce exactly 1 HALLUCINATED_METHOD warning."
+}
