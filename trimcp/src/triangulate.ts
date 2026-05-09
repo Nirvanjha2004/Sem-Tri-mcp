@@ -23,7 +23,9 @@ export function triangulate(
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
     .map(([key]) => {
-      const [file, line] = key.split(":");
+      const lastColon = key.lastIndexOf(":");
+      const file = key.slice(0, lastColon);
+      const line = key.slice(lastColon + 1);
       return { file, line: parseInt(line) };
     });
 }

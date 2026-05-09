@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 import { getEmbedding, cosineSimilarity } from "../signals/semantic.js";
 import { EmbeddingCache } from "../cache/embeddingCache.js";
 
@@ -45,7 +46,10 @@ export class VectorIndex {
     // (For large repos, you'd want a vector DB like HNSW)
     const files = fs.readdirSync(projectPath, { recursive: true }) as string[];
     
-    for (const file of files) {
+    for (const relativePath of files) {
+      // readdirSync returns relative paths — resolve to absolute so they match
+      // the full paths used when indexing via indexFile().
+      const file = path.resolve(projectPath, relativePath);
       const cached = this.cache.get(file);
       if (!cached) continue;
 

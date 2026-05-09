@@ -2,7 +2,7 @@ import { Project, SyntaxKind } from "ts-morph";
 
 export function getStructuralMatches(projectPath: string, keywords: string[]) {
   const project = new Project();
-  project.addSourceFilesAtPaths(`${projectPath}/**/*.ts`);
+  project.addSourceFilesAtPaths(`${projectPath}/src/**/*.ts`);
   
   const matches: any[] = [];
   
