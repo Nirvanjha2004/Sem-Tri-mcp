@@ -1,28 +1,138 @@
-# TrimCP - Surgical Triangulation MCP Server
+# TrimCP — Surgical Context MCP Server
 
-A **Model Context Protocol (MCP)** server that provides intelligent, surgical code context retrieval by combining three complementary search signals: **keyword matching**, **semantic embeddings**, and **structural analysis**. This enables AI-powered tools and agents to pinpoint the most relevant code snippets with precision.
+TrimCP is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that gives AI assistants precise, relevant code snippets from your project instead of dumping entire files into context. It uses three signals — keyword search, semantic embeddings, and AST structure — to triangulate the exact lines most relevant to a query.
 
-## 🎯 Overview
+## How It Works
 
-TrimCP solves the problem of retrieving relevant code context in large codebases. Instead of relying on a single search strategy, it triangulates across:
+When you ask your AI assistant something like *"How does authentication work?"*, TrimCP:
 
-1. **Keyword Search** - Fast pattern matching using ripgrep for exact term matches
-2. **Semantic Search** - Deep learning embeddings that capture meaning and intent
-3. **Structural Analysis** - AST-based detection of function/class declarations
+1. **Keyword Signal** — runs [ripgrep](https://github.com/BurntSushi/ripgrep) across your source files to find lines matching your query terms (comments and docs excluded)
+2. **Structural Signal** — parses your TypeScript source with [ts-morph](https://ts-morph.com) to find function and class declarations whose names match the query
+3. **Triangulation** — scores and ranks results by how many signals agree, returning the top 10 most relevant snippets with surrounding context
 
-By combining these three signals, TrimCP identifies intersections where multiple search methods agree, resulting in highly accurate, surgical code context extraction.
+The result is a tight, surgical slice of your codebase — not a firehose.
 
-## ✨ Key Features
+## Prerequisites
 
-- **Triangulation-Based Ranking** - Combines multiple search signals with intelligent weighting
-- **Semantic Understanding** - Uses transformers for meaning-based code search
-- **Fast Keyword Matching** - Leverages ripgrep for instant pattern matching
-- **Structural Awareness** - Parses TypeScript AST to understand code organization
-- **Intelligent Caching** - Embedding cache with mtime-based invalidation
-- **MCP Integration** - Standard Model Context Protocol interface for LLM integration
-- **Chunked Processing** - Handles large files with overlapping chunks for continuity
+- [Node.js](https://nodejs.org) v18 or later
+- [ripgrep](https://github.com/BurntSushi/ripgrep#installation) (`rg`) available on your PATH
 
-## 📋 Architecture
+### Installing ripgrep
+
+| Platform | Command |
+|----------|---------|
+| macOS | `brew install ripgrep` |
+| Windows | `winget install BurntSushi.ripgrep.MSVC` or `choco install ripgrep` |
+| Ubuntu/Debian | `sudo apt install ripgrep` |
+| Arch Linux | `sudo pacman -S ripgrep` |
+
+Verify with: `rg --version`
+
+## Installation
+
+```bash
+git clone https://github.com/your-username/trimcp.git
+cd trimcp
+npm install
+npm run build
+```
+
+## Connecting to Your AI Client
+
+TrimCP runs as a stdio MCP server. Add it to your client's MCP configuration.
+
+### Kiro / VS Code (via `.kiro/settings/mcp.json`)
+
+```json
+{
+  "mcpServers": {
+    "trimcp": {
+      "command": "node",
+      "args": ["C:/path/to/trimcp/build/index.js"],
+      "disabled": false,
+      "autoApprove": ["get_surgical_context"]
+    }
+  }
+}
+```
+
+### Claude Desktop (via `claude_desktop_config.json`)
+
+```json
+{
+  "mcpServers": {
+    "trimcp": {
+      "command": "node",
+      "args": ["/absolute/path/to/trimcp/build/index.js"]
+    }
+  }
+}
+```
+
+> Use the absolute path to `build/index.js`. On Windows use forward slashes or escaped backslashes.
+
+## Usage
+
+Once connected, TrimCP exposes a single tool: **`get_surgical_context`**.
+
+### Tool Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | ✅ | Natural language description of what you're looking for |
+| `projectPath` | string | ✅ | Absolute path to the project you want to search |
+
+### Example Queries
+
+**In your AI chat, you can say:**
+
+> "Use get_surgical_context to find how user authentication is handled in `C:\projects\myapp`"
+
+> "Search for the database connection setup in `/home/user/projects/api`"
+
+> "Find the payment processing logic in my project at `C:\projects\ecommerce`"
+
+### Direct Tool Call (MCP Inspector)
+
+```json
+{
+  "query": "user authentication middleware",
+  "projectPath": "C:\\Users\\you\\projects\\myapp"
+}
+```
+
+### Example Response
+
+```json
+[
+  {
+    "file": "C:\\projects\\myapp\\src\\middleware\\auth.ts",
+    "snippet": "export function requireAuth(req: Request, res: Response, next: NextFunction) {\n  const token = req.headers.authorization?.split(' ')[1];\n  if (!token) return res.status(401).json({ error: 'Unauthorized' });\n  ..."
+  },
+  {
+    "file": "C:\\projects\\myapp\\src\\services\\authService.ts",
+    "snippet": "export async function verifyToken(token: string): Promise<User> {\n  const payload = jwt.verify(token, process.env.JWT_SECRET!);\n  ..."
+  }
+]
+```
+
+If nothing relevant is found, the tool returns:
+```
+No results found for the given query in this project.
+```
+
+## What Gets Searched
+
+TrimCP searches **source code only**. The following are automatically excluded:
+
+- `node_modules/`, `build/`, `dist/`
+- `*.d.ts` type declaration files
+- `*.md`, `*.json`, `*.txt`, `*.lock` documentation and config files
+- Pure comment lines (`//`, `/* */`, `#`)
+
+Currently supports any language ripgrep can search, with enhanced structural analysis for **TypeScript** projects that have a `src/` directory.
+
+## Project Structure
 
 ```
 trimcp/
@@ -39,279 +149,33 @@ trimcp/
 │   │   ├── semantic.ts             # Transformers-based embeddings
 │   │   └── structure.ts            # ts-morph AST analysis
 │   └── tools/
-│       └── getSurgicalContext.ts   # Main MCP tool definition
-├── build/                          # Compiled JavaScript output
-├── package.json
-├── tsconfig.json
-└── README.md
+│       └── getSurgicalContext.ts   # MCP tool handler
+├── build/                          # Compiled output (after npm run build)
+└── .trimcp/                        # Cache directory (auto-created)
 ```
 
-## 🔧 Technology Stack
+## Known Limitations
 
-- **Language**: TypeScript
-- **Runtime**: Node.js
-- **MCP SDK**: `@modelcontextprotocol/sdk` - Protocol integration
-- **Embeddings**: `@xenova/transformers` - Semantic search with Xenova/all-MiniLM-L6-v2
-- **Search**: ripgrep (external) - Fast keyword matching
-- **AST Parsing**: `ts-morph` - TypeScript syntax tree analysis
-- **File Watching**: chokidar - Reactive cache invalidation
+- **TypeScript projects only** for structural (AST) analysis — the keyword signal works for any language
+- **ripgrep must be installed separately** — it is not bundled
+- Semantic (embedding) search is implemented but not yet wired into the active query pipeline
+- Best results on projects with a `src/` directory layout
 
-## 🚀 Getting Started
-
-### Prerequisites
-
-- **Node.js** ≥ 16.0.0
-- **ripgrep** (`rg`) - [Install ripgrep](https://github.com/BurntSushi/ripgrep#installation)
-- TypeScript knowledge recommended but not required
-
-### Installation
+## Development
 
 ```bash
-# Clone the repository
-git clone https://github.com/Nirvanjha2004/Sem-Tri-mcp.git
-cd trimcp
-
 # Install dependencies
 npm install
 
-# Build TypeScript
+# Build
 npm run build
+
+# Run directly
+node build/index.js
 ```
 
-### Configuration
+To test with the MCP Inspector, run the server and connect via stdio transport pointing to `build/index.js`.
 
-Before running, ensure ripgrep is available in your PATH:
+## License
 
-```bash
-# Verify ripgrep installation
-rg --version
-```
-
-If not installed:
-- **macOS**: `brew install ripgrep`
-- **Windows**: `choco install ripgrep` or download from [GitHub releases](https://github.com/BurntSushi/ripgrep#installation)
-- **Linux**: `sudo apt-get install ripgrep` (Ubuntu/Debian)
-
-## 📖 Usage
-
-### As an MCP Server
-
-Start the server:
-
-```bash
-npm start
-```
-
-The server listens on stdio and exposes the `get_surgical_context` tool.
-
-### Tool: `get_surgical_context`
-
-**Purpose**: Retrieve relevant code context using triangulation.
-
-**Input Parameters**:
-```typescript
-{
-  query: string           // Search query (e.g., "authentication handler")
-  projectPath: string     // Absolute path to the project root
-}
-```
-
-**Response**:
-```typescript
-{
-  content: [
-    {
-      type: "text",
-      text: JSON.stringify([
-        {
-          file: "/path/to/file.ts",
-          snippet: "... code context with 5 lines before and 10 after match ..."
-        },
-        // Up to 10 most relevant results
-      ])
-    }
-  ]
-}
-```
-
-### Example Usage (Programmatic)
-
-```typescript
-import { getSurgicalContextTool } from "./tools/getSurgicalContext.js";
-
-const results = await getSurgicalContextTool.handler({
-  query: "JWT verification",
-  projectPath: "/path/to/project"
-});
-
-console.log(results);
-```
-
-## 🧠 How Triangulation Works
-
-### Signal Processing
-
-1. **Keyword Signal** - `keyword.ts`
-   - Uses ripgrep to find all lines matching search terms
-   - Returns file paths and line numbers
-
-2. **Semantic Signal** - `semantic.ts`
-   - Embeds query using Xenova/all-MiniLM-L6-v2
-   - Caches embeddings for efficiency
-   - Computes cosine similarity between query and code chunks
-
-3. **Structural Signal** - `structure.ts`
-   - Parses all TypeScript files via ts-morph
-   - Finds function/class declarations matching keywords
-   - Returns high-signal structural matches
-
-### Scoring & Ranking
-
-The `triangulate()` function in `triangulate.ts` combines signals:
-
-```
-- Each keyword hit: +1 point
-- Each structural hit: +2 points (higher signal)
-- Results ranked by total score
-- Top 10 results returned
-```
-
-Intersections (matches from multiple signals) receive higher scores, ensuring precision.
-
-## 💾 Caching Strategy
-
-The embedding cache (`cache/`) stores:
-
-```typescript
-{
-  "file/path.ts": {
-    mtime: 1234567890,      // File modification time
-    chunks: [
-      { text: "...", embedding: [...] },
-      { text: "...", embedding: [...] }
-    ]
-  }
-}
-```
-
-**Cache Invalidation**:
-- Automatic when file's mtime changes
-- Located at `.trimcp/cache.json` in project root
-- Prevents recomputing embeddings for unchanged files
-
-## 🔍 Signal Weights & Tuning
-
-Current weights (in `triangulate.ts`):
-- Keyword match: **1 point**
-- Structural match: **2 points**
-
-To adjust relevance, modify the weights in `triangulate()`:
-
-```typescript
-keywordHits.forEach(h => {
-  scores.set(key, (scores.get(key) || 0) + 1);  // ← Adjust this
-});
-
-structuralHits.forEach(h => {
-  scores.set(key, (scores.get(key) || 0) + 2);  // ← Or this
-});
-```
-
-## 🧪 Development
-
-### Build
-
-```bash
-npm run build
-```
-
-Compiles TypeScript from `src/` to `build/`.
-
-### Environment Variables
-
-Create a `.env` file for configuration (optional):
-
-```env
-LOG_LEVEL=debug
-CACHE_DIR=.trimcp
-MAX_RESULTS=10
-```
-
-Currently unused but ready for expansion.
-
-### Project Structure Best Practices
-
-- Keep search queries between 2-5 words for best results
-- Use specific domain terminology for semantic search
-- Structural search works best with exact function/class names
-- Large codebases benefit from embedding caching
-
-## 🤝 Integration with LLM Tools
-
-TrimCP is designed for integration with Claude, GPT-4, or other LLMs via MCP:
-
-1. **Configure MCP Client**: Point your LLM client to this server's stdio
-2. **Use `get_surgical_context`**: Call the tool with user queries
-3. **Inject Context**: Feed returned snippets into LLM prompts
-4. **Iterative Refinement**: Refine queries based on LLM feedback
-
-Example integration pattern:
-```
-User Query 
-  ↓
-LLM receives query via `get_surgical_context`
-  ↓
-TrimCP returns surgical code snippets
-  ↓
-LLM analyzes + responds with code-aware answer
-```
-
-## 📊 Performance Notes
-
-- **Keyword Search**: O(n) with ripgrep (typically <100ms)
-- **Semantic Search**: O(n·m) where n=files, m=chunks (first run cached after)
-- **Structural Analysis**: O(n) with ts-morph for all TypeScript files
-- **Embedding Cache**: Reduces semantic search time from ~5s to <500ms on cached projects
-
-For large codebases (10k+ files), consider:
-- Limiting project scope in queries
-- Pre-warming the cache on startup
-- Using ripgrep filters to exclude directories
-
-## 🐛 Troubleshooting
-
-### "rg: command not found"
-Ensure ripgrep is installed and in your PATH. See [Prerequisites](#prerequisites).
-
-### Embedding cache growing large
-Delete `.trimcp/cache.json` to start fresh:
-```bash
-rm -rf .trimcp/cache.json
-```
-
-### Slow semantic searches on first run
-The embeddings model (~130MB) downloads on first use. Subsequent searches use cache.
-
-### No results returned
-- Verify `projectPath` exists and is absolute
-- Check that the project contains TypeScript files
-- Try broadening your search query
-
-## 📝 License
-
-[Specify your license here]
-
-## 🙋 Contributing
-
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request with description
-
-## 📞 Support
-
-For issues, questions, or feature requests, please open a GitHub issue.
-
----
-
-**Built with precision for surgical code retrieval** 🔬
+MIT
