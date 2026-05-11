@@ -1,13 +1,16 @@
 {
   "name": "trimcp",
   "version": "0.1.0",
+  "description": "Surgical context MCP server — keyword + semantic + structural triangulation for AI code assistants",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "latest",
+    "@modelcontextprotocol/sdk": "1.29.0",
     "@xenova/transformers": "^2.17.1",
     "ts-morph": "^22.0.0",
-    "chokidar": "^3.6.0",
-    "child_process": "latest"
+    "chokidar": "^3.6.0"
   },
   "devDependencies": {
     "typescript": "^5.4.5",
