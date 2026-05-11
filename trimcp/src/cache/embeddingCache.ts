@@ -5,6 +5,7 @@ export interface CacheEntry {
   mtime: number;
   chunks: {
     text: string;
+    startLine: number;
     embedding: number[];
   }[];
 }
